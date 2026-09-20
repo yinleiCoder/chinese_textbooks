@@ -1,0 +1,289 @@
+# 发布客户端：打 tag（v*）即出 Android APK 与 Windows 安装包，挂到本仓库的 GitHub Release。
+#
+# Windows 只出一个 exe：整个 Release 目录（exe + 各插件 dll + data\）都由 Inno Setup
+# 封进安装器里，用户双击装完就能用。
+#
+# 为什么是 tag 触发：发布版本必须与代码一一对应，tag 是唯一不会漂移的锚点；
+# 手动跑（workflow_dispatch）只为验证流水线本身，产出的包不会创建 Release。
+#
+# 混淆与符号：两个平台都带 --obfuscate --split-debug-info。符号文件
+# **只作为 Actions artifact 上传，不进 Release**——它们能反解混淆，
+# 公开挂出去等于白混淆；排查崩溃时从 workflow 运行页下载即可。
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {} # 只跑构建、不发 Release
+
+permissions:
+  contents: write # 创建 Release 需要
+
+env:
+  FLUTTER_VERSION: "3.47.0"
+
+jobs:
+  # ---------- 门禁 ----------
+  # 红了就不往下走，免得把编译得过但行为不对的包发出去。
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # *.g.dart 没有入库，所以这一步不能省——少了它 analyze 与 test
+      # 会因为找不到 part 文件而直接失败。
+      - name: 代码生成
+        run: |
+          flutter pub get
+          dart run build_runner build
+
+      - run: flutter analyze
+      - run: flutter test
+
+  # ---------- Windows ----------
+  build-windows:
+    needs: check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: 版本号（tag → 版本名 + 递增版本号）
+        # **必须显式传 --build-number**：否则 Android 的 versionCode 永远是 pubspec 里的 +1，
+        # 而系统只允许 versionCode 更大的包覆盖安装 —— 用户会看到装到一半「应用未安装」。
+        # 用 run_number 保证单调递增；版本名取 tag（去掉 v 前缀，versionName 不接受它）。
+        id: ver
+        shell: bash
+        run: |
+          tag="${{ github.ref_type == 'tag' && github.ref_name || 'v0.0.0-dev' }}"
+          echo "name=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: 准备构建依赖
+        shell: pwsh
+        run: |
+          flutter pub get
+          # *.g.dart 没有入库，构建前必须先生成。
+          dart run build_runner build
+          # 预置 PDFium，省得构建钩子临时去 GitHub Release 拉
+          #（那一步对网络很敏感，是已知的构建失败来源）。
+          dart run tool/setup_pdfium.dart
+          # windows/tools/nuget.exe 是 9MB 的二进制，不进版本库；
+          # 而 windows/CMakeLists.txt 找不到它就直接报错。
+          New-Item -ItemType Directory -Force windows\tools | Out-Null
+          curl.exe -sSL -o windows\tools\nuget.exe `
+            https://dist.nuget.org/win-x86-commandline/latest/nuget.exe
+
+      - name: 构建（混淆）
+        shell: pwsh
+        run: |
+          flutter build windows --release `
+            --build-name=${{ steps.ver.outputs.name }} `
+            --build-number=${{ steps.ver.outputs.code }} `
+            --obfuscate `
+            --split-debug-info=symbols/windows `
+            --extra-gen-snapshot-options=--save-obfuscation-map=symbols/windows/obfuscation-map.json
+
+      - name: 补上 MSVC 运行库（app-local）
+        # Flutter **不打包 C 运行时**，它假定目标机器装过 Visual Studio。
+        # 没装过的电脑双击 exe 完全没有反应（连错误框都不弹），这是"别的电脑打不开"的头号原因。
+        # 微软明确允许把这组 dll 随应用一起分发，随包带上最省事。
+        #
+        # **不要写死 VS 的版本与路径**：runner 镜像升级时 VS 的大版本会变，
+        # 路径也跟着变。用微软官方的 vswhere 定位，再兜一层通配。
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = $null
+          if (Test-Path $vswhere) { $vsPath = & $vswhere -latest -products * -property installationPath }
+          Write-Host "VS: $vsPath"
+
+          $crt = $null
+          if ($vsPath) {
+            $crt = Get-ChildItem "$vsPath\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT" -Directory -ErrorAction SilentlyContinue |
+                   Sort-Object Name -Descending | Select-Object -First 1
+          }
+          if (-not $crt) {
+            $crt = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\*\*\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT" -Directory -ErrorAction SilentlyContinue |
+                   Sort-Object Name -Descending | Select-Object -First 1
+          }
+          if (-not $crt) { throw "找不到 VC 运行时目录（vswhere 与通配都没命中）—— 不补这组 dll，包发出去在别人电脑上打不开" }
+
+          # **整个 CRT 目录一起拷**（约 10 个 dll / 2 MB）。
+          # 只拷 msvcp140 + vcruntime140 + vcruntime140_1 是不够的：新版 STL 还会用到
+          # msvcp140_1 / _2 / _threads / _atomic_wait，缺哪个都是同样的"双击没反应"。
+          Copy-Item "$($crt.FullName)\*.dll" "build/windows/x64/runner/Release/" -Force
+          Write-Host "已从 $($crt.FullName) 补入 $((Get-ChildItem "$($crt.FullName)\*.dll").Count) 个 dll"
+        shell: pwsh
+
+      - name: 编译安装器（Inno Setup）
+        # Inno Setup 不在 runner 的预装列表里，用 Chocolatey 装（runner 自带 choco）。
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = Get-ChildItem "C:\Program Files*\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue |
+                  Select-Object -First 1
+          if (-not $iscc) { throw "Inno Setup 安装后找不到 ISCC.exe" }
+          Write-Host "ISCC：$((Get-Item $iscc.FullName).VersionInfo.FileVersion)"
+
+          # 中文语言文件优先用编译器自带的那份（Inno 7 有）。issrc 的 Unofficial 目录
+          # 那份已经 404 了，别去下。取不到就退回英文界面——安装器照常能装，
+          # 不该为一个翻译文件卡死整条发布链。
+          $msg = "compiler:Languages\ChineseSimplified.isl"
+          if (-not (Test-Path (Join-Path (Split-Path $iscc.FullName) "Languages\ChineseSimplified.isl"))) {
+            Write-Host "::warning::这个 Inno Setup 没带中文语言文件，安装器将使用英文界面"
+            $msg = "compiler:Default.isl"
+          }
+
+          # exe 的版本属性必须是纯数字：Inno 不接受 "1.0.1-dev" 这类后缀，格式不对会**编译失败**，
+          # 而这一步失败等于整个发布挂掉（连安装包都发不出去）。所以这里把非数字后缀砍掉，
+          # 砍完仍不成形就用 0.0.0 兜底 —— 宁可版本号朴素，也不能让发布链断在一个显示字段上。
+          $numeric = "${{ steps.ver.outputs.name }}" -replace '[^0-9.].*$', ''
+          if ($numeric -notmatch '^\d+(\.\d+){1,3}$') { $numeric = "0.0.0" }
+          Write-Host "文件版本号：$numeric"
+
+          & $iscc.FullName `
+            "/DAppVersion=${{ steps.ver.outputs.name }}" `
+            "/DNumericVersion=$numeric" `
+            "/DMessagesFile=$msg" `
+            "/DBuildDir=$PWD\build\windows\x64\runner\Release" `
+            "installer\windows\chinese_textbooks.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          # 只出安装器：双击装完，快捷方式、卸载项、升级都由它管。
+          # 整个 Release 目录（exe + 8 个 dll + data\）都打进这一个 exe 里，
+          # 用户不需要知道"不能只拷 exe"这回事。
+          path: build/installer/*-setup.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-symbols
+          path: symbols/windows/*
+          if-no-files-found: error
+          retention-days: 90
+
+  # ---------- Android ----------
+  build-android:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: 版本号（tag → 版本名 + 递增版本号）
+        id: ver
+        shell: bash
+        run: |
+          tag="${{ github.ref_type == 'tag' && github.ref_name || 'v0.0.0-dev' }}"
+          echo "name=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: 准备构建依赖
+        run: |
+          flutter pub get
+          dart run build_runner build
+          dart run tool/setup_pdfium.dart
+
+      - name: 配置签名
+        # 没配 ANDROID_KEYSTORE_BASE64 时用 debug 签名——能装，但**换台机器就发不出
+        # 可覆盖安装的更新**（Android 要求同包名同签名）。正式发布请先生成一次 keystore
+        #（见 android/key.properties.example），把 base64 与口令存进本仓库 secret。
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::warning::未配置 ANDROID_KEYSTORE_BASE64，本次用 debug 签名（仅适合内测）"
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          # storeFile 是相对 android/app 的路径（build.gradle.kts 里的 file(it) 就是这么解析的）。
+          cat > android/key.properties <<EOF
+          storeFile=release.keystore
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+
+      - name: 构建（混淆）
+        run: |
+          flutter build apk --release \
+            --build-name=${{ steps.ver.outputs.name }} \
+            --build-number=${{ steps.ver.outputs.code }} \
+            --obfuscate \
+            --split-debug-info=symbols/android \
+            --extra-gen-snapshot-options=--save-obfuscation-map=symbols/android/obfuscation-map.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-symbols
+          path: symbols/android/*
+          if-no-files-found: error
+          retention-days: 90
+
+  # ---------- 发布 ----------
+  release:
+    needs: [build-windows, build-android]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: 规整资产名
+        run: |
+          mkdir -p assets
+          cp dist/windows-installer/*-setup.exe assets/
+          cp dist/android-apk/*.apk "assets/wujie-textbook-android.apk"
+          ls -la assets
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: |
+            无界课本 ${{ github.ref_name }}
+
+            - **Windows**：下载 `wujie-textbook-windows-x64-setup.exe`，双击安装即可
+              - 会创建桌面与开始菜单快捷方式
+              - 已带上 C 运行库，目标电脑无需另装 Visual C++ Redistributable
+            - **Android**：下载 `wujie-textbook-android.apk` 直接安装（首次需允许「安装未知来源应用」）
+
+            本应用与国家中小学智慧教育平台没有隶属或合作关系。教材版权归原平台及相关权利人所有，
+            仅供个人学习与教学参考，请勿用于商业用途或二次分发。
+          files: assets/*
+          fail_on_unmatched_files: true

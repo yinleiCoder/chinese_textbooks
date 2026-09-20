@@ -1,0 +1,219 @@
+# 包名是 Dart 标识符，只能用小写 ASCII，因此沿用 chinese_textbooks。
+# 软件的展示名与发布名是「无界课本」，它在四处各有一份拷贝，改名字时要一起改：
+# lib/values/app_config.dart 的 AppConfig.appName、
+# android/app/src/main/AndroidManifest.xml 的 android:label、
+# windows/runner/main.cpp 的窗口标题、windows/runner/Runner.rc 的 ProductName。
+name: chinese_textbooks
+description: "无界课本：国家中小学智慧教育平台教材的浏览、下载与离线阅读客户端。"
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.0
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+dependencies:
+  flutter:
+    sdk: flutter
+  # Material / Cupertino 内置组件的多语言文案（中文需要显式引入）
+  flutter_localizations:
+    sdk: flutter
+
+  # ==================== 路由 ====================
+  # pub.dev 声明式路由事实标准，官方 Flutter 团队维护
+  go_router: ^18.0.1
+
+  # ==================== 状态管理 ====================
+  # 官方推荐的轻量状态管理，ChangeNotifier + InheritedWidget
+  provider: ^6.1.5
+
+  # ==================== 网络 ====================
+  # Dart 生态使用量最高的 HTTP 客户端，拦截器/适配器体系完整
+  dio: ^5.11.1
+
+  # ==================== 屏幕适配 ====================
+  # 按设计稿尺寸等比适配宽高、圆角与字号
+  flutter_screenutil: ^5.9.3
+
+  # ==================== 本地存储 / 缓存 ====================
+  # 下载量最高的 KV 存储，作为缓存持久层
+  shared_preferences: ^2.5.5
+  # Token、密钥等敏感数据走系统级加密存储，与普通缓存隔离
+  flutter_secure_storage: ^11.2.0
+
+  # ==================== 设备能力 ====================
+  # 网络连通性监听，驱动离线态与缓存降级策略
+  connectivity_plus: ^7.3.1
+
+  # ==================== 图片 ====================
+  # 磁盘 + 内存两级图片缓存，避免重复下载
+  cached_network_image: ^4.0.0
+
+  # ==================== PDF 阅读 ====================
+  # PDFium 内核，Windows + Android 双端；支持文字选中、全文搜索、缩放
+  pdfrx: ^2.6.5
+
+  # ==================== 内嵌登录 ====================
+  # 唯一同时支持 Windows 与 Android 的 WebView 实现
+  # （官方的 webview_flutter 只支持 Android/iOS/macOS）。
+  #
+  # 这里用 6.2.0 的 beta 而不是 6.1.5 稳定版：后者发布于 2024-10，
+  # 其 Android 模块的 Gradle 脚本仍调用已被 AGP 9 移除的
+  # `getDefaultProguardFile('proguard-android.txt')`，会直接导致 Android 构建失败；
+  # 6.2.0-beta.3 已改用 `proguard-android-optimize.txt`。
+  # 待 6.2.0 正式版发布后，把约束收敛为 ^6.2.0 即可。
+  flutter_inappwebview: ^6.2.0-beta.3
+
+  # ==================== 文件系统 ====================
+  # 应用私有目录（catalog / library / tmp）
+  path_provider: ^2.1.6
+  # 跨平台路径拼接与文件名处理
+  path: ^1.9.0
+  # 导出教材时的"另存为"对话框（桌面端）与目录选择（SAF）
+  file_picker: ^13.1.0
+  # 系统分享面板，把教材发给别的应用
+  share_plus: ^13.3.0
+
+  # ==================== 基础设施 ====================
+  # 结构化日志，替代 print
+  logger: ^2.8.0
+  # 日期、数字、货币的本地化格式化
+  intl: ^0.20.3
+  # 值相等语义，实体类与缓存键比较的基础
+  equatable: ^3.0.0
+  # 集合工具集（LRU 缓存、分组、排序等）
+  collection: ^1.19.1
+  # HMAC-SHA256，用于 X-ND-AUTH 请求签名
+  crypto: ^3.0.7
+  # 标注驱动 JSON 序列化，配合 build_runner 生成 *.g.dart
+  json_annotation: ^4.12.0
+  # Dart 官方元数据注解（@immutable / @useResult 等）。
+  # 直接用 package:meta 而不是从 flutter 转出，是为了让 utils/ 保持纯 Dart。
+  meta: ^1.17.0
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at the root of your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  flutter_lints: ^6.0.0
+
+  # 代码生成：json_serializable 标注处理器
+  build_runner: ^2.16.1
+  json_serializable: ^6.14.1
+
+  # 仅供 tool/setup_pdfium.dart 解压 PDFium 的 .tgz 包使用。
+  # 它本来就是 pdfium_dart 的传递依赖，提升为直接依赖只是为了满足
+  # depend_on_referenced_packages，并没有引入新的下载。
+  archive: ^4.3.0
+
+  # 由 assets/兔子.svg 派生出 Android 各密度的应用图标。
+  # 用法见 tool/generate_app_icons.dart 顶部的说明。
+  flutter_launcher_icons: ^0.14.4
+
+  # 仅供 tool/generate_app_icons.dart 打包多尺寸 .ico 使用（解码 PNG + 写 ICO 容器）。
+  # 它本来就是 flutter_launcher_icons 的传递依赖，提升为直接依赖只是为了满足
+  # depend_on_referenced_packages，并没有引入新的下载。
+  image: ^4.10.1
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  # 多语言资源由 values/app_strings.dart 统一托管，暂不启用 .arb 代码生成。
+
+  # To add assets to your application, add an assets section, like this:
+  # assets:
+  #   - images/a_dot_burr.jpeg
+  #   - images/a_dot_ham.jpeg
+
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/to/resolution-aware-images
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/to/asset-from-package
+
+  # To add custom fonts to your application, add a fonts section here,
+  # in this "flutter" section. Each entry in this list should have a
+  # "family" key with the font family name, and a "fonts" key with a
+  # list giving the asset and other descriptors for the font. For
+  # example:
+  # fonts:
+  #   - family: Schyler
+  #     fonts:
+  #       - asset: fonts/Schyler-Regular.ttf
+  #       - asset: fonts/Schyler-Italic.ttf
+  #         style: italic
+  #   - family: Trajan Pro
+  #     fonts:
+  #       - asset: fonts/TrajanPro.ttf
+  #       - asset: fonts/TrajanPro_Bold.ttf
+  #         weight: 700
+  #
+  # For details regarding fonts from package dependencies,
+  # see https://flutter.dev/to/font-from-package
+
+# ==================== 应用图标 ====================
+#
+# 图标的设计源是 assets/兔子.svg，但各平台只认位图，中间隔了一层光栅化：
+#
+#   assets/兔子.svg
+#     └─ dart run tool/generate_app_icons.dart
+#          ├─ windows/runner/resources/app_icon.ico   多尺寸，Windows 直接使用
+#          └─ assets/icons/app_icon.png               Android 母图
+#               └─ dart run flutter_launcher_icons
+#                    └─ android/app/src/main/res/mipmap-*/ic_launcher.png
+#
+# 改图标只改 SVG，然后依次跑上面两个命令。派生结果都进版本库，
+# 因此日常构建不需要跑这条链。
+#
+# Windows 的 .ico 不经过 flutter_launcher_icons：它的 Windows 分支只出单尺寸
+# 图标，任务栏 16×16 会被硬缩放糊掉，原因详见 tool/generate_app_icons.dart。
+flutter_launcher_icons:
+  android: true
+  image_path: "assets/icons/app_icon.png"
+  # 自适应图标（Android 8+）。这里不设 windows，因为它生成的那一版不如
+  # tool/generate_app_icons.dart 出的多尺寸 .ico。
+  #
+  # 前景直接用同一张母图：flutter_launcher_icons 期望它满幅作画，
+  # 再由下面这个 inset 把图形收进安全区（见 adaptiveIconForegroundInset）。
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icons/app_icon.png"
+  # 自适应图标是 108dp 画布、中间 72dp 可见，且可见区还可能被裁成圆形。
+  # 图形本身上下顶格，16（包默认值）时上下会各被切掉约 0.7dp，收到 18 更稳妥。
+  adaptive_icon_foreground_inset: 18

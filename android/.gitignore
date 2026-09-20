@@ -1,0 +1,19 @@
+gradle-wrapper.jar
+/.gradle
+/captures/
+/gradlew
+/gradlew.bat
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# 构建过程留下的：Kotlin 增量编译的会话文件、Gradle 的问题报告。
+# 模板没带这两条，不加的话 `git add -A` 会把它们一并提交进去。
+/.kotlin/
+/build/
+
+# Remember to never publicly share your keystore.
+# See https://flutter.dev/to/reference-keystore
+key.properties
+**/*.keystore
+**/*.jks

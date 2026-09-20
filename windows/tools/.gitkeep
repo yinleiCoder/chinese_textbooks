@@ -1,0 +1,2 @@
+NuGet CLI 由 CI（或本地构建前的 curl）放进这个目录，见 windows/CMakeLists.txt。
+本文件只是为了让空目录能被 git 跟踪。

@@ -1,0 +1,26 @@
+# 代码生成配置。
+#
+# 运行方式：
+#   dart run build_runner build --delete-conflicting-outputs   # 单次生成
+#   dart run build_runner watch --delete-conflicting-outputs   # 监听变更
+#
+# 生成产物（*.g.dart）与源文件放在同一目录，方便对照查看；
+# 它们属于构建产物，**不要手动修改**，也不要提交到版本库之外的任何地方。
+targets:
+  $default:
+    builders:
+      json_serializable:
+        options:
+          # 嵌套对象显式调用其 toJson，而不是依赖 jsonEncode 的隐式转换。
+          # 后者在字段是 Object/dynamic 时会静默产出错误结果，很难排查。
+          explicit_to_json: true
+          # 值为 null 的字段不写入 JSON，减小缓存体积。
+          include_if_null: false
+          # 生成 fromJson 工厂与 toJson 方法。
+          create_factory: true
+          create_to_json: true
+          # 字段名与 Dart 属性名保持一致，由服务端适配层负责大小写/下划线转换，
+          # 生成代码里不掺杂命名映射规则，便于排查字段对不上的问题。
+          field_rename: none
+          # 遇到无法识别的类型时报错而不是静默生成 dynamic 解析。
+          checked: true

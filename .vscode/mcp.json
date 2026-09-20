@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "dart": {
+      "command": "dart",
+      "args": ["mcp-server"]
+    }
+  }
+}

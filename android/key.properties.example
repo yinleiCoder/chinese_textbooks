@@ -1,0 +1,17 @@
+# 发布签名配置的模板。
+#
+# 复制成 android/key.properties 并填上自己的值——那个文件**不进版本库**。
+# 生成 keystore（只需做一次，做完请离线备份，丢了就再也无法给已上架的应用发版）：
+#
+#   keytool -genkey -v -keystore upload-keystore.jks -storetype JKS \
+#           -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# 路径里的反斜杠要写两个（properties 文件里 \ 是转义符）：
+#   storeFile=C:\\Users\\me\\upload-keystore.jks
+#
+# CI 不用这个文件：它从仓库 Secrets 现写一份（见 .github/workflows/release.yml）。
+
+storePassword=<keystore 口令>
+keyPassword=<key 口令，通常与上面相同>
+keyAlias=upload
+storeFile=<keystore 文件的绝对路径>

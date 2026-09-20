@@ -1,0 +1,142 @@
+# 静态分析配置。
+#
+# 目标不是"规则越多越好"，而是让**能被机器发现的问题不要留到运行期**：
+# 类型推断过宽、忘记 await、忘记取消订阅、导包顺序混乱，
+# 这些都在这里一次性拦住。规则一旦开启就应当保持绿灯，
+# 出现例外请用 `// ignore: 规则名` 就地豁免并写明原因，
+# 而不是关掉整条规则。
+
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+    # 代码生成产物由 build_runner 维护，不参与人工规则检查。
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+
+  language:
+    # 禁止隐式向下转型：`Object` 转具体类型必须显式写 `as`。
+    strict-casts: true
+    # 推断不出类型时报错，避免 `dynamic` 悄悄扩散。
+    strict-inference: true
+    # 裸泛型（`List` 而非 `List<T>`）视为错误。
+    strict-raw-types: true
+
+  errors:
+    # json_serializable 的注解参数会被误判，官方建议忽略。
+    invalid_annotation_target: ignore
+    # 缺少必填参数、缺少返回值都属于编译期就该拦住的问题。
+    missing_required_param: error
+    missing_return: error
+    # TODO 只是记录，不当作告警噪音。
+    todo: ignore
+
+linter:
+  rules:
+    # ==================== 类型与安全 ====================
+    always_declare_return_types: true
+    avoid_dynamic_calls: true
+    avoid_returning_null_for_void: true
+    avoid_slow_async_io: true
+    avoid_type_to_string: true
+    cast_nullable_to_non_nullable: true
+    collection_methods_unrelated_type: true
+    exhaustive_cases: true
+    null_check_on_nullable_type_parameter: true
+    tighten_type_of_initializing_formals: true
+    type_annotate_public_apis: true
+    unnecessary_null_aware_assignments: true
+
+    # ==================== 异步与资源 ====================
+    # 忘记 await 的 Future 是最难排查的一类 bug，必须显式 unawaited()。
+    unawaited_futures: true
+    await_only_futures: true
+    avoid_void_async: true
+    cancel_subscriptions: true
+    close_sinks: true
+
+    # ==================== 错误处理 ====================
+    avoid_empty_else: true
+    avoid_returning_this: true
+    control_flow_in_finally: true
+    throw_in_finally: true
+    test_types_in_equals: true
+
+    # ==================== 设计约束 ====================
+    avoid_equals_and_hash_code_on_mutable_classes: true
+    avoid_field_initializers_in_const_classes: true
+    avoid_unused_constructor_parameters: true
+    no_logic_in_create_state: true
+    overridden_fields: true
+    prefer_mixin: true
+    use_enums: true
+    use_super_parameters: true
+
+    # ==================== 代码风格 ====================
+    # 刻意不启用 always_put_required_named_parameters_first：
+    # Flutter 的惯例是把 `super.key` 放在参数列表首位，两者会持续冲突。
+    avoid_bool_literals_in_conditional_expressions: true
+    avoid_relative_lib_imports: true
+    camel_case_extensions: true
+    camel_case_types: true
+    constant_identifier_names: true
+    directives_ordering: true
+    empty_catches: true
+    empty_constructor_bodies: true
+    eol_at_end_of_file: true
+    no_duplicate_case_values: true
+    no_runtimeType_toString: true
+    non_constant_identifier_names: true
+    prefer_final_fields: true
+    prefer_final_in_for_each: true
+    prefer_final_locals: true
+    prefer_int_literals: true
+    prefer_single_quotes: true
+    require_trailing_commas: true
+    sort_child_properties_last: true
+    unnecessary_breaks: true
+    unnecessary_lambdas: true
+    unnecessary_parenthesis: true
+    unnecessary_statements: true
+    unnecessary_to_list_in_spreads: true
+    use_string_buffers: true
+
+    # ==================== 文档 ====================
+    # 文档里写错的 `[类名]` 会随重命名一起失效，这条规则负责发现它。
+    comment_references: true
+    dangling_library_doc_comments: true
+    library_annotations: true
+    provide_deprecation_message: true
+
+    # ==================== 字符串与集合 ====================
+    join_return_with_assignment: true
+    literal_only_boolean_expressions: true
+    missing_whitespace_between_adjacent_strings: true
+    no_adjacent_strings_in_list: true
+    prefer_const_constructors: true
+    prefer_const_constructors_in_immutables: true
+    prefer_const_declarations: true
+    prefer_const_literals_to_create_immutables: true
+    prefer_interpolation_to_compose_strings: true
+    prefer_null_aware_method_calls: true
+    use_colored_box: true
+    use_decorated_box: true
+    use_is_even_rather_than_modulo: true
+    use_named_constants: true
+    valid_regexps: true
+
+    # ==================== Widget ====================
+    sized_box_for_whitespace: true
+
+    # ==================== 依赖 ====================
+    # 用到了没写进 pubspec.yaml 的包时报警，防止"能跑但别人拉下来就崩"。
+    depend_on_referenced_packages: true
+    conditional_uri_does_not_exist: true
+    deprecated_consistency: true
