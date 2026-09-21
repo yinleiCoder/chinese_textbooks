@@ -3,11 +3,12 @@
 国家中小学智慧教育平台（basic.smartedu.cn）的第三方客户端，Windows + Android 双端。
 支持浏览、搜索、筛选、批量下载与离线阅读平台上的电子教材。
 
-> 仓库名与 Dart 包名仍是 `chinese_textbooks`（包名只能用小写 ASCII 标识符），
-> 软件的展示名与发布名统一为「无界课本」。
-
 > 本应用与国家中小学智慧教育平台没有隶属或合作关系。教材版权归原平台及相关权利人所有，
 > 仅供个人学习与教学参考，请勿用于商业用途或二次分发。
+
+![书架](./docs/书架.png)
+![目录](./docs/目录.png)
+![下载](./docs/下载.png)
 
 ## 功能
 
@@ -194,168 +195,6 @@ SizedBox(height: AppDimens.gapMd)
 `.w` 用于宽度与水平间距，`.h` 用于需要"一屏高度固定"的场景，
 `.r` 用于圆角与正方形边长，`.sp` 用于字号。需要临时换算时可直接用扩展方法
 （`16.w` / `16.r` / `16.sp`）。
-
-## 常用命令
-
-```bash
-flutter pub get                  # 安装依赖
-
-# 代码生成（修改了带 @JsonSerializable 的类之后必须执行）
-dart run build_runner build
-dart run build_runner watch      # 开发期监听变更
-
-flutter analyze                  # 静态分析，应当保持零问题
-flutter test                     # 单元测试与组件测试
-dart format lib test             # 格式化
-
-# 切换环境运行
-flutter run --dart-define=APP_ENV=staging
-```
-
-## 应用图标与名称
-
-**图标**的设计源是 `assets/兔子.svg`，而两个平台都只认位图，中间隔了一层派生：
-
-```bash
-dart run tool/generate_app_icons.dart   # SVG → 母图 PNG + Windows 多尺寸 .ico
-dart run flutter_launcher_icons         # 母图 → Android 各密度 mipmap
-```
-
-改图标只改 SVG，然后依次跑上面两条命令。派生结果都进版本库，日常构建不需要跑这条链。
-细节（为什么 Windows 不走 flutter_launcher_icons、为什么只让浏览器画一张图）
-写在 [tool/generate_app_icons.dart](tool/generate_app_icons.dart) 顶部。
-
-**名称**「无界课本」在四处各有一份拷贝，改名字时四处要一起改：
-
-| 位置 | 作用 |
-| --- | --- |
-| [lib/values/app_config.dart](lib/values/app_config.dart) 的 `AppConfig.appName` | 应用内展示（`MaterialApp.title`） |
-| [android/app/src/main/AndroidManifest.xml](android/app/src/main/AndroidManifest.xml) 的 `android:label` | Android 桌面图标名 |
-| [windows/runner/main.cpp](windows/runner/main.cpp) 的窗口标题 | Windows 窗口标题 |
-| [windows/runner/Runner.rc](windows/runner/Runner.rc) 的 `ProductName` / `FileDescription` | 文件属性、任务管理器 |
-
-Dart 包名（`pubspec.yaml` 的 `name`）只能用小写 ASCII 标识符，因此仍是 `chinese_textbooks`。
-
-> ⚠ **改 Windows 的 `ProductName` 等于改数据目录。** `path_provider` 是用 exe 版本信息里的
-> `CompanyName` + `ProductName` 拼出 `%APPDATA%\<公司名>\<产品名>` 的，改名之后应用会在
-> 新目录里从零开始：已下载的教材、阅读进度、登录态全部"失踪"（文件其实还在旧目录）。
-> 本项目的产品名从 `chinese_textbooks` 改成「无界课本」时就踩过一次，数据靠手工搬迁找回。
-> 要再改名，先规划好旧目录怎么搬。
-
-## 发版
-
-推一个 `v*` 标签即可，[.github/workflows/release.yml](.github/workflows/release.yml)
-会把两端都构建出来并挂到 GitHub Release 上：
-
-```bash
-git tag v1.2.0 && git push origin main --tags
-```
-
-**版本号只有一个来源：标签。** 版本名取标签去掉 `v`，Android 的 `versionCode`
-取 `github.run_number`（保证单调递增）。这两项都通过 `--build-name` /
-`--build-number` 显式传给构建，不读 `pubspec.yaml` ——
-`pubspec.yaml` 里的 `version` 只是本地开发用的默认值。
-
-> `--build-number` **不能省**：不传的话 versionCode 永远停在 pubspec 的 `+1`，
-> 而系统只允许 versionCode 更大的包覆盖安装，用户更新时会装到一半报「应用未安装」。
-
-流水线四个 job：`check`（analyze + test）→ `build-windows` / `build-android` → `release`。
-两个构建都依赖 `check`，红了就不往下走。在 Actions 页面手动触发只跑构建、不发 Release，
-用来验证流水线本身。
-
-### 产物
-
-资产名**不带版本号**，所以下面这两个链接永远指向最新版：
-
-| 文件 | 说明 |
-| --- | --- |
-| `wujie-textbook-windows-x64-setup.exe` | Windows 安装包（Inno Setup），双击即装 |
-| `wujie-textbook-android.apk` | Android 安装包，首次需允许「安装未知来源应用」 |
-
-```
-https://github.com/yinleiCoder/chinese_textbooks/releases/latest/download/wujie-textbook-windows-x64-setup.exe
-https://github.com/yinleiCoder/chinese_textbooks/releases/latest/download/wujie-textbook-android.apk
-```
-
-Windows 只出这一个 exe：整个 Release 目录（exe + 各插件 dll + `data\`）都被
-Inno Setup 封了进去，所以用户不需要知道"不能只拷 exe"这回事。
-
-打包前会**补进 MSVC 运行库**（`msvcp140.dll` 等约 10 个 dll）。Flutter 自己不打包
-C 运行时，目标机器没装过 Visual Studio 的话，双击 exe 会毫无反应——连错误框都不弹。
-这一步不能省。
-
-### 混淆与符号表
-
-两端都用 `--obfuscate --split-debug-info` 构建，并额外存一份 `obfuscation-map.json`。
-符号表能让混淆失效，所以**只作为 Actions artifact 上传（90 天），不进 Release**。
-排查线上崩溃时从 workflow 运行页下载，然后：
-
-```bash
-flutter symbolize -i <崩溃日志> -d <解压出来的 app.android-arm64.symbols>
-```
-
-混淆不是加密：它只改符号名，**不会**保护资源、也挡不住逆向。真正的密钥
-（平台令牌等）本来就只放系统安全存储，不进代码。
-
-### 需要的仓库 Secrets
-
-`Settings → Secrets and variables → Actions`：
-
-| Secret | 说明 |
-| --- | --- |
-| `ANDROID_KEYSTORE_BASE64` | keystore 的 base64，见下 |
-| `ANDROID_KEYSTORE_PASSWORD` | keystore 口令 |
-| `ANDROID_KEY_ALIAS` | 别名，通常 `upload` |
-| `ANDROID_KEY_PASSWORD` | key 口令（通常同上） |
-
-没配 `ANDROID_KEYSTORE_BASE64` 时流水线**不会失败**，只会打一条 warning 并改用
-debug 签名。但 debug 签名的包**换台机器就发不出可覆盖安装的更新**（Android 要求
-同包名同签名），只适合内测——正式发布务必先配好。
-
-keystore 的生成方式见 [android/key.properties.example](android/key.properties.example)。
-**请离线备份 keystore**：丢了这个文件，就再也无法给已上架的应用发新版。
-
-Windows 安装包目前**没有代码签名**。用户安装时 Windows 会弹 SmartScreen 警告
-（"未知发布者"）。要消掉它得买一张代码签名证书，再用 `signtool` 签——这是笔
-持续支出，本项目暂时没做。
-
-## 静态分析
-
-`analysis_options.yaml` 在 `flutter_lints` 之上开启了更严格的一组规则，
-并启用了三项严格模式：
-
-- `strict-casts`：禁止隐式向下转型
-- `strict-inference`：推断不出类型时报错，避免 `dynamic` 扩散
-- `strict-raw-types`：裸泛型视为错误
-
-几条值得注意的规则：
-
-- `unawaited_futures`：忘记 `await` 的 Future 必须显式写 `unawaited(...)`
-- `cancel_subscriptions` / `close_sinks`：资源忘记释放会直接报错
-- `comment_references`：文档注释里写错的 `[类名]` 会被发现
-- `require_trailing_commas` / `directives_ordering`：格式统一，减少 diff 噪音
-
-规则一旦开启就应当保持绿灯。确需例外时用 `// ignore: 规则名` 就地豁免并写明原因，
-不要关掉整条规则。
-
-## 构建前置准备
-
-`flutter pub get` 之后、首次构建之前，需要执行一次：
-
-```bash
-dart run tool/setup_pdfium.dart
-```
-
-它把 `pdfrx` 依赖的 PDFium 二进制预置到构建钩子期望的位置（Windows x64 与 Android 三个 ABI）。
-原因见下方「PDFium 下载受网络影响」。脚本幂等，**每次 `flutter clean` 之后需要重跑**
-（clean 会删除 `.dart_tool`）。只想补某个平台时可传架构参数，如 `dart run tool/setup_pdfium.dart arm64`。
-
-Windows 端还需要 NuGet CLI。`windows/CMakeLists.txt` 会优先在 `windows/tools/` 里找，
-找不到时给出获取命令：
-
-```bash
-curl -L -o windows/tools/nuget.exe https://dist.nuget.org/win-x86-commandline/latest/nuget.exe
-```
 
 ## 已知环境问题
 

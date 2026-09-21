@@ -232,6 +232,28 @@ jobs:
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
 
+          # 立刻验一次口令。不验的话，口令写错要等到六分钟后的
+          # `:app:packageRelease` 才炸，而那时只报一句 "Cannot recover key"，
+          # 看不出是四个 secret 里的哪一个错了。
+          #
+          # keytool -certreq 会真的去解私钥，校验路径与打包时完全一致，
+          # 报错也是同一套，所以这里按报错分流给出结论：
+          if ! keytool -certreq -alias "$ANDROID_KEY_ALIAS" \
+                 -keystore android/app/release.keystore \
+                 -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+                 -keypass "$ANDROID_KEY_PASSWORD" \
+                 -file "$RUNNER_TEMP/verify.csr" 2>&1 | tee "$RUNNER_TEMP/keytool.log"; then
+            echo "::error::签名口令校验失败，按下面三条对应到是哪个 secret 写错了："
+            grep -q "Cannot recover key" "$RUNNER_TEMP/keytool.log" &&
+              echo "::error::ANDROID_KEY_PASSWORD 不对（keystore 已打开，说明 store 口令是对的）。若是 PKCS12 类型的 keystore，key 口令必须与 store 口令相同。"
+            grep -q "password was incorrect" "$RUNNER_TEMP/keytool.log" &&
+              echo "::error::ANDROID_KEYSTORE_PASSWORD 不对。"
+            grep -q "does not exist" "$RUNNER_TEMP/keytool.log" &&
+              echo "::error::ANDROID_KEY_ALIAS 不对（默认是 upload）。"
+            exit 1
+          fi
+          echo "签名口令校验通过"
+
       - name: 构建（混淆）
         run: |
           flutter build apk --release \
