@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- INTERNET 权限必须声明在这里，不能只靠 debug/profile 的清单。
+         Flutter 模板只在 src/debug 与 src/profile 里给了这个权限（注释理由是热重载），
+         而 release 构建**不会**合并这两个目录，于是打出来的 APK 一个网络请求都发不出去：
+         表现为"进入软件目录就说网络失败"，但 `flutter run` 一切正常，极具误导性。
+         本应用没有后端，目录索引与教材文件全部走网络，缺了它等于装了个空壳。 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="无界课本"
         android:name="${applicationName}"
